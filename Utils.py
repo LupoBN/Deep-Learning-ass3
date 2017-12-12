@@ -1,0 +1,113 @@
+import copy
+from collections import Counter
+from gen_examples import generate_example
+
+def parse_tag_reading(lines, seperator, lower=False):
+    words = list()
+    labels = list()
+    sentence = list()
+    sentence_labels = list()
+    for line in lines:
+        if line != '':
+            words_labels = line.rsplit(seperator, 1)
+            if lower:
+                words_labels[0] = words_labels[0].lower()
+            sentence.append(words_labels[0])
+            if len(words_labels) > 1:
+                sentence_labels.append(words_labels[1])
+        else:
+            sentence = ["^^^^^", "^^^^^"] + sentence + ["$$$$$", "$$$$$"]
+            sentence_labels = ["Start-", "Start-"] + sentence_labels + ["End-", "End-"]
+            words.append(copy.deepcopy(sentence))
+            labels.append(copy.deepcopy(sentence_labels))
+            sentence = list()
+            sentence_labels = list()
+    return words, labels
+
+def parse_vocab_words_reading(lines, seperator=None, lower=False):
+    words = [line for line in lines]
+    W2I = {key: value for value, key in enumerate(words)}
+
+    return words, W2I
+
+
+def parse_vocab_reading(lines, seperator=None, lower=False):
+    words = [line for line in lines]
+    W2I = {key: value for value, key in enumerate(words)}
+
+    return W2I
+
+def get_abcd_mapping():
+    W2I = {str(i + 1): i for i in range(0, 9)}
+    W2I["a"] = len(W2I)
+    W2I["b"] = len(W2I)
+    W2I["c"] = len(W2I)
+    W2I["d"] = len(W2I)
+    return W2I
+
+def create_dataset(number_of_examples):
+    good_example_letters = ["a", "b", "c", "d"]
+    bad_example_letters = ["a", "c", "b", "d"]
+    data = list()
+    for i in range(0, number_of_examples, 2):
+        data.append((generate_example(good_example_letters), 1))
+        data.append((generate_example(bad_example_letters), 0))
+    return data
+
+
+def sub_words_mapping(sentences, start, most_to_take=5002):
+    prefixes_words = [["Pre-" + word[0:3] if len(word) >= 3 else "lessthanthree"] for sentence in sentences for word in
+                      sentence[0]]
+    suffixes_words = [["Suf-" + word[-4:-1] if len(word) >= 3 else "lessthanthree"] for sentence in sentences for word
+                      in sentence[0]]
+    count_prefixes = count_uniques(prefixes_words)
+    count_suffixes = count_uniques(suffixes_words)
+    del count_prefixes["lessthanthree"]
+    del count_suffixes["lessthanthree"]
+    possibles_prefixes = set([x for x, l in count_prefixes.most_common(most_to_take)])
+    possibles_suffixes = set([x for x, l in count_suffixes.most_common(most_to_take)])
+    possibles_prefixes.add("Pre-UNK")
+    possibles_suffixes.add("Suf-UNK")
+
+    sub_map = dict()
+    for pre in possibles_prefixes:
+        if pre not in sub_map:
+            sub_map[pre] = start
+            start += 1
+    for suf in possibles_suffixes:
+        if suf not in sub_map:
+            sub_map[suf] = start
+            start += 1
+
+    return sub_map
+
+
+def read_file(file_name, parse_func, seperator=None, lower=False):
+    file = open(file_name, 'r')
+    lines = file.read().splitlines()
+    file.close()
+    return parse_func(lines, seperator, lower)
+
+
+def write_file(file_name, content, parse_func, seperator):
+    file = open(file_name, 'w')
+    file.write(parse_func(content, seperator))
+    file.close()
+
+
+def create_mapping(data, ignore_elements=None, most_to_take=15000):
+    count = count_uniques(data)
+    possibles = set([x for x, l in count.most_common(most_to_take)])
+    if ignore_elements != None:
+        possibles = possibles.difference(ignore_elements)
+    else:
+        possibles.add("UUUNKKK")
+
+    return {f: i for i, f in enumerate(list(sorted(possibles)))}
+
+
+def count_uniques(sentences):
+    fc = Counter()
+    for words in sentences:
+        fc.update(words)
+    return fc
