@@ -20,14 +20,26 @@ def generate_number_sequence():
         sequence += digit_sequeunce_num
     return sequence
 
-
-def generate_example(letters):
+def generate_example(letters, numbers=True):
     sequence = str()
     for letter in letters:
-        sequence += generate_number_sequence()
-        sequence += generate_letter_sequence(letter)
+        if numbers:
+            sequence += generate_number_sequence()
+        sequence += generate_letter_sequence(str(letter))
     return sequence
 
+def generate_sentences(number_of_examples, letters, label, numbers=True):
+    data = list()
+    for i in range(0, number_of_examples):
+
+        data.append((generate_example(letters, numbers), label))
+    return data
+
+def generate_limited_sentence(letters, number_of_appearnces):
+    sentence = str()
+    for i, letter in enumerate(letters):
+        sentence += "".join([letter] * number_of_appearnces[i])
+    return sentence
 
 if __name__ == '__main__':
     good_example_letters = ["a", "b", "c", "d"]

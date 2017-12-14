@@ -37,22 +37,16 @@ def parse_vocab_reading(lines, seperator=None, lower=False):
 
     return W2I
 
-def get_abcd_mapping():
+def get_abcd_mapping(abcd):
     W2I = {str(i + 1): i for i in range(0, 9)}
-    W2I["a"] = len(W2I)
-    W2I["b"] = len(W2I)
-    W2I["c"] = len(W2I)
-    W2I["d"] = len(W2I)
+    for letter in abcd:
+        W2I[letter] = len(W2I)
     return W2I
 
-def create_dataset(number_of_examples):
-    good_example_letters = ["a", "b", "c", "d"]
-    bad_example_letters = ["a", "c", "b", "d"]
-    data = list()
-    for i in range(0, number_of_examples, 2):
-        data.append((generate_example(good_example_letters), 1))
-        data.append((generate_example(bad_example_letters), 0))
-    return data
+
+def get_power_two_mapping(max_value):
+    W2I = {str(i) + "a": i for i in range(0, max_value)}
+    return W2I
 
 
 def sub_words_mapping(sentences, start, most_to_take=5002):

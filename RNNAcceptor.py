@@ -21,6 +21,14 @@ class RNNAcceptor(object):
         b_out = self._b_out.expr()
         vecs = [self._E[self._W2I[i]] for i in sequence]
 
-        outputs = lstm.transduce(vecs)
-        result = dy.logistic(W_out * dy.tanh(W_hid * outputs[-1] + b_hid) + b_out)
+        s = self._builder.initial_state()
+
+        # embedd each char in the seq, and feed it to the LSTM one word at a time.
+
+        for char in sequence:
+            char_embedded = dy.lookup(self._E, self._W2I[char])
+
+            s = s.add_input(char_embedded)
+        lstm_out = s.output()
+        result = W_out * dy.tanh(W_hid * lstm_out + b_hid) + b_out
         return result

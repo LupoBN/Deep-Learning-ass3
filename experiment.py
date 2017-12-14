@@ -8,6 +8,14 @@ VOCAB_SIZE = 13
 EMBED_SIZE = 30
 
 
+def loss_and_preds(acceptor, sequence, label):
+    preds = acceptor(sequence)
+    preds = dy.softmax(preds)
+    prediction = np.argmax(preds.npvalue())
+    loss = -dy.log(dy.pick(preds, label))
+    return loss, prediction
+
+
 def train_acceptor(train, dev, num_of_iterations, trainer, acceptor):
     time0 = time.time()
     for epoch in range(num_of_iterations):
@@ -16,16 +24,10 @@ def train_acceptor(train, dev, num_of_iterations, trainer, acceptor):
         acc = 0.0
         for sequence, label in train:
             dy.renew_cg()  # new computation graph
-            preds = acceptor(sequence)
-            y = dy.scalarInput(label)
-            loss = dy.binary_log_loss(preds, y)
-
+            loss, prediction = loss_and_preds(acceptor, sequence, label)
             sum_of_losses += loss.value()
-            vals = 0
-            if preds.value() >= 0.5:
-                vals = 1
-            if vals == label:
-                acc += 1.0
+            if prediction == label:
+                acc += 1
             loss.backward()
             trainer.update()
 
@@ -48,24 +50,22 @@ def test_acceptor(dev, acceptor):
     for sequence, label in dev:
         dy.renew_cg()  # new computation graph
 
-        preds = acceptor(sequence)
-        vals = 0
-        if preds.value() >= 0.5:
-            vals = 1
-        if vals == label:
-            acc += 1.0
-        y = dy.scalarInput(label)
-        loss = dy.binary_log_loss(preds, y)
+        loss, prediction = loss_and_preds(acceptor, sequence, label)
+        if prediction == label:
+            acc += 1
         sum_of_losses += loss.value()
     return acc / len(dev), sum_of_losses / len(dev)
 
 
 if __name__ == '__main__':
-    train = create_dataset(10000)
-    dev = create_dataset(1000)
-    W2I = get_abcd_mapping()
+    train = generate_sentences(5000, ["a", "b", "c", "d"], 1)
+    train += generate_sentences(5000, ["a", "c", "b", "d"], 0)
+    dev = generate_sentences(500, ["a", "b", "c", "d"], 1)
+    dev += generate_sentences(500, ["a", "c", "b", "d"], 0)
+
+    W2I = get_abcd_mapping("abcd")
 
     m = dy.Model()
     trainer = dy.AdamTrainer(m)
-    acceptor = RNNAcceptor(1, EMBED_SIZE, 2, 2, 1, m, VOCAB_SIZE, W2I)
+    acceptor = RNNAcceptor(1, EMBED_SIZE, 2, 2, 2, m, VOCAB_SIZE, W2I)
     train_acceptor(train, dev, 2, trainer, acceptor)
