@@ -1,6 +1,6 @@
 import copy
 from collections import Counter
-from gen_examples import generate_example
+
 
 def parse_tag_reading(lines, seperator, lower=False):
     words = list()
@@ -24,6 +24,7 @@ def parse_tag_reading(lines, seperator, lower=False):
             sentence_labels = list()
     return words, labels
 
+
 def parse_vocab_words_reading(lines, seperator=None, lower=False):
     words = [line for line in lines]
     W2I = {key: value for value, key in enumerate(words)}
@@ -34,13 +35,6 @@ def parse_vocab_words_reading(lines, seperator=None, lower=False):
 def parse_vocab_reading(lines, seperator=None, lower=False):
     words = [line for line in lines]
     W2I = {key: value for value, key in enumerate(words)}
-
-    return W2I
-
-def get_abcd_mapping(abcd):
-    W2I = {str(i + 1): i for i in range(0, 9)}
-    for letter in abcd:
-        W2I[letter] = len(W2I)
     return W2I
 
 
@@ -74,6 +68,22 @@ def sub_words_mapping(sentences, start, most_to_take=5002):
             start += 1
 
     return sub_map
+
+
+def write_examples_parser(content, seperator):
+    output_str = str()
+    for sample in content:
+        output_str += str(sample[1]) + "\t" + sample[0] + seperator
+    return output_str
+
+
+def read_examples_parser(content, seperator, lower=False):
+    examples = list()
+    for sample in content:
+        new_sample = sample.split(seperator)
+        example = (new_sample[1], new_sample[0])
+        examples.append(example)
+    return examples
 
 
 def read_file(file_name, parse_func, seperator=None, lower=False):

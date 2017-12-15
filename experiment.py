@@ -2,18 +2,10 @@ import dynet as dy
 from gen_examples import *
 from Utils import *
 from RNNAcceptor import RNNAcceptor
+import sys
 import time
 
-VOCAB_SIZE = 13
 EMBED_SIZE = 30
-
-
-def loss_and_preds(acceptor, sequence, label):
-    preds = acceptor(sequence)
-    preds = dy.softmax(preds)
-    prediction = np.argmax(preds.npvalue())
-    loss = -dy.log(dy.pick(preds, label))
-    return loss, prediction
 
 
 def train_acceptor(train, dev, num_of_iterations, trainer, acceptor):
@@ -22,9 +14,9 @@ def train_acceptor(train, dev, num_of_iterations, trainer, acceptor):
         np.random.shuffle(train)
         sum_of_losses = 0.0
         acc = 0.0
+
         for sequence, label in train:
-            dy.renew_cg()  # new computation graph
-            loss, prediction = loss_and_preds(acceptor, sequence, label)
+            loss, prediction = acceptor.forward(sequence, label)
             sum_of_losses += loss.value()
             if prediction == label:
                 acc += 1
@@ -32,6 +24,7 @@ def train_acceptor(train, dev, num_of_iterations, trainer, acceptor):
             trainer.update()
 
         dev_acc, dev_loss = test_acceptor(dev, acceptor)
+
         print "Itertation:", epoch + 1
         print "Training accuracy:", acc / len(train)
         print "Training loss:", sum_of_losses / len(train)
@@ -48,24 +41,24 @@ def test_acceptor(dev, acceptor):
     sum_of_losses = 0.0
 
     for sequence, label in dev:
-        dy.renew_cg()  # new computation graph
-
-        loss, prediction = loss_and_preds(acceptor, sequence, label)
+        loss, prediction = acceptor.forward(sequence, label)
+        sum_of_losses += loss.value()
         if prediction == label:
             acc += 1
-        sum_of_losses += loss.value()
     return acc / len(dev), sum_of_losses / len(dev)
 
 
 if __name__ == '__main__':
-    train = generate_sentences(5000, ["a", "b", "c", "d"], 1)
-    train += generate_sentences(5000, ["a", "c", "b", "d"], 0)
-    dev = generate_sentences(500, ["a", "b", "c", "d"], 1)
-    dev += generate_sentences(500, ["a", "c", "b", "d"], 0)
+    train = read_file(sys.argv[1], read_examples_parser)
+    dev = read_file(sys.argv[2], read_examples_parser)
+    c = Counter()
+    for sample, label in train:
+        c.update(sample)
+    W2I = {key: i for i, key in enumerate(c)}
+    L2I = {l: i for i, l in enumerate(list(sorted(set([l for t, l in train]))))}
+    I2L = {L2I[key]: key for key in L2I}
 
-    W2I = get_abcd_mapping("abcd")
-
-    m = dy.Model()
+    m = dy.ParameterCollection()
     trainer = dy.AdamTrainer(m)
-    acceptor = RNNAcceptor(1, EMBED_SIZE, 2, 2, 2, m, VOCAB_SIZE, W2I)
-    train_acceptor(train, dev, 2, trainer, acceptor)
+    acceptor = RNNAcceptor(1, EMBED_SIZE, 128, 64, 2, len(W2I), W2I, L2I, I2L, m)
+    train_acceptor(train, dev, 200, trainer, acceptor)
