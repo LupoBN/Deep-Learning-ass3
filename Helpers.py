@@ -1,5 +1,4 @@
-import random
-
+import time
 import dynet as dy
 import numpy as np
 import matplotlib.pyplot as plt
@@ -18,80 +17,119 @@ def blind_write(data, network, output_filename, separator):
     output_file.close()
 
 
-def test_data(data, network):
-    total_loss = 0.0
-    correct = 0.0
-    total = 0.0
-    totalacc = 0.0
+def train_bi_lstm(train, dev, num_of_iterations, trainer, acceptor, batch_size, history=200000):
+    for epoch in range(num_of_iterations):
+        np.random.shuffle(train)
 
-    for words, labels in data:
-        dy.renew_cg()
-        num_words = len(words) - 2
-        words_nums = np.array([tuple(word for word in words[i - 2:i + 3]) for i in range(2, num_words)])
-        labels_num = np.array([label for label in labels[2:-2]])
-        loss, prediction = network.forward(words_nums, labels_num)
-        for i in range(0, prediction.size):
-            if prediction[i] == "O" and labels_num[i] == "O":
-                continue
-            elif prediction[i] == labels_num[i]:
-                correct += 1.0
-                # print "Correct, Predicted", prediction[i], "Real:", labels_num[i]
-                # else:
-                #   print "Wrong, Predicted", prediction[i], "Real:", labels_num[i]
-
-            totalacc += 1.0
-        total += prediction.size
-        total_loss += loss.value()
-    acc = correct / totalacc
-    total_loss /= total
-
-    return total_loss, acc
-
-
-def train_model(train, dev, network, trainer, num_iterations, save_file, droput1=0.0, droput2=0.0):
-    dev_losses = list()
-    dev_accs = list()
-    best_acc = -np.inf
-    for I in xrange(num_iterations):
-        random.shuffle(train)
-        random.shuffle(dev)
-        total_loss = 0.0
         correct = 0.0
-        total = 0.0
-        totalacc = 0.0
-        for words, labels in train:
-            dy.renew_cg()
-            num_words = len(words) - 2
-            # Convert
-            words_nums = np.array([tuple(word for word in words[i - 2:i + 3]) for i in range(2, num_words)])
-
-            labels_num = np.array([label.strip("\n") for label in labels[2:-2]])
-            loss, prediction = network.forward(words_nums, labels_num, droput1, droput2)
-            for i in range(0, prediction.size):
-                if prediction[i] == "O" and labels_num[i] == "O":
-                    continue
-                elif prediction[i] == labels_num[i]:
-                    correct += 1.0
-                totalacc += 1.0
-
-            total += prediction.size
-            total_loss += loss.value()
+        incorrect = 0.0
+        sum_of_losses = 0.0
+        counter = 1
+        for sequence, label in train:
+            dy.renew_cg()  # new computation graph
+            loss, prediction = acceptor.forward(sequence, label)
+            sum_of_losses += loss.value()
             loss.backward()
             trainer.update()
-        dev_loss, dev_acc = test_data(dev, network)
-        if dev_acc > best_acc:
-            #network.save_model(save_file)
-            best_acc = dev_acc
-        dev_losses.append(dev_loss)
-        dev_accs.append(dev_acc)
+            for i, pred in enumerate(prediction):
+                # print pred
+                if pred == "O" and label[i + 1] == "O":
+                    continue
+                if pred == label[i + 1]:
+                    correct += 1.0
+                else:
+                    # print "Wrong, Predicted:", pred, "True Label:", label[i + 2]
+                    incorrect += 1.0
+            if counter % 500 == 0:
+                pass
+            counter += 1
+        print "Itertation:", epoch + 1
+        print "Training accuracy:", correct / (correct + incorrect)
+        print "Training loss:", sum_of_losses / (correct + incorrect)
+        dev_acc, dev_loss = test_bi_lstm(dev, acceptor, batch_size, history)
+        print "Test accuracy:", dev_acc
+        print "Test loss:", dev_loss
 
-        print "Itertation:", I
-        print "Training Loss:", total_loss / total
-        print "Training Accuracy:", correct / totalacc
-        print "Dev Loss:", dev_loss
-        print "Dev Accuracy:", dev_acc
 
-    return dev_losses, dev_accs
+def test_bi_lstm(dev, acceptor, batch_size, history):
+    np.random.shuffle(dev)
+    sum_of_losses = 0.0
+    correct = 0.0
+    incorrect = 0.0
+    for sequence, label in dev:
+        dy.renew_cg()  # new computation graph
+
+        if len(sequence) <= 1:
+            continue
+        loss, prediction = acceptor.forward(sequence, label)
+        sum_of_losses += loss.value()
+        for i, pred in enumerate(prediction):
+            # print pred
+            if pred == "O" and label[i + 1] == "O":
+                continue
+            if pred == label[i + 1]:
+                # print "Correct, Predicted:", pred, "True Label:", label[i + 2]
+                correct += 1.0
+            else:
+                # print "Wrong, Predicted:", pred, "True Label:", label[i + 2]
+
+                incorrect += 1.0
+    return correct / (correct + incorrect), sum_of_losses / (correct + incorrect)
+
+
+def train_acceptor(train, dev, num_of_iterations, trainer, acceptor, batch_size):
+    time0 = time.time()
+
+    for epoch in range(num_of_iterations):
+        counter = 0
+        np.random.shuffle(train)
+        mini_batches = [train[i:i + batch_size] for i in range(0, len(train), batch_size)]
+
+        acc = 0.0
+        sum_of_losses = 0.0
+
+        dy.renew_cg()  # new computation graph
+        for mini_batch in mini_batches:
+            losses = []
+            for sequence, label in mini_batch:
+                loss, prediction = acceptor.forward(sequence, label)
+                losses.append(loss)
+                if prediction == label:
+                    acc += 1.0
+
+            batch_loss = dy.esum(losses)
+            sum_of_losses += batch_loss.value()
+            batch_loss.backward()
+            trainer.update()
+            counter += 1
+        dev_acc, dev_loss = test_acceptor(dev, acceptor, batch_size)
+        print "Itertation:", epoch + 1
+        print "Training accuracy:", acc / len(train)
+        print "Training loss:", sum_of_losses / len(train)
+        print "Test accuracy:", dev_acc
+        print "Test loss:", dev_loss
+
+    time1 = time.time()
+    print "Finished training after", time1 - time0, " seconds"
+
+
+def test_acceptor(dev, acceptor, batch_size):
+    np.random.shuffle(dev)
+    mini_batches = [dev[i:i + batch_size] for i in range(0, len(dev), batch_size)]
+    sum_of_losses = 0.0
+    acc = 0.0
+    dy.renew_cg()  # new computation graph
+    for mini_batch in mini_batches:
+        losses = []
+
+        for sequence, label in mini_batch:
+            loss, prediction = acceptor.forward(sequence, label)
+            losses.append(loss)
+            if prediction == label:
+                acc += 1.0
+        batch_loss = dy.esum(losses)
+        sum_of_losses += batch_loss.value()  # this calls forward on the batch
+    return acc / len(dev), sum_of_losses / len(dev)
 
 
 # Plots the result of the training.

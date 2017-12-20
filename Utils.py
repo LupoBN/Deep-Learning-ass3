@@ -9,15 +9,15 @@ def parse_tag_reading(lines, seperator, lower=False):
     sentence_labels = list()
     for line in lines:
         if line != '':
-            words_labels = line.rsplit(seperator, 1)
+            words_labels = line.split()
             if lower:
                 words_labels[0] = words_labels[0].lower()
             sentence.append(words_labels[0])
             if len(words_labels) > 1:
                 sentence_labels.append(words_labels[1])
         else:
-            sentence = ["^^^^^", "^^^^^"] + sentence + ["$$$$$", "$$$$$"]
-            sentence_labels = ["Start-", "Start-"] + sentence_labels + ["End-", "End-"]
+            sentence = ["^^^^^"] + sentence + ["$$$$$"]
+            sentence_labels = ["Start-"] + sentence_labels + ["End-"]
             words.append(copy.deepcopy(sentence))
             labels.append(copy.deepcopy(sentence_labels))
             sentence = list()
