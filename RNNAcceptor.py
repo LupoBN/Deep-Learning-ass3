@@ -25,10 +25,11 @@ class RNNAcceptor(object):
         W_out = dy.parameter(self._W_out)
         b_out = dy.parameter(self._b_out)
         vecs = [self._E[self._W2I[i]] for i in sequence]
-        lstm_out = s.transduce(vecs)
-        output_lstm = lstm_out[-1]
+        for vec in vecs:
+            s = s.add_input(vec)
+        lstm_out = s.output()
 
-        result = dy.softmax((W_out * dy.tanh((W_hid * output_lstm) + b_hid)) + b_out)
+        result = dy.softmax((W_out * dy.tanh((W_hid * lstm_out) + b_hid)) + b_out)
         return result
 
     def forward(self, sequence, label):

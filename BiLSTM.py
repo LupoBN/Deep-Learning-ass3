@@ -24,18 +24,19 @@ class BiLSTMNetwork(object):
         W_out = dy.parameter(self._W_out)
         b_out = dy.parameter(self._b_out)
         vecs = self._representor.represent(sequence)
+
         first_fwd = self._fwd_RNN_first.initial_state()
         first_bwd = self._bwd_RNN_first.initial_state()
         second_fwd = self._fwd_RNN_second.initial_state()
         second_bwd = self._fwd_RNN_second.initial_state()
 
         rnn_fwd_first = first_fwd.transduce(vecs)
-        rnn_bwd_first = (first_bwd.transduce(vecs)[::-1])[::-1]
+        rnn_bwd_first = (first_bwd.transduce(vecs[::-1]))[::-1]
 
         first_layer_fwd = [dy.concatenate([fwd_out, bwd_out]) for fwd_out, bwd_out in zip(rnn_fwd_first, rnn_bwd_first)]
         first_layer_bwd = first_layer_fwd[::-1]
         rnn_fwd_second = second_fwd.transduce(first_layer_fwd)
-        rnn_bwd_second = second_bwd.transduce(first_layer_bwd)
+        rnn_bwd_second = (second_bwd.transduce(first_layer_bwd))[::-1]
         lstm_out = [dy.concatenate([fwd_out, bwd_out]) for fwd_out, bwd_out in zip(rnn_fwd_second, rnn_bwd_second)]
 
         results = list()
@@ -57,6 +58,17 @@ class BiLSTMNetwork(object):
             losses.append(loss)
         loss = dy.esum(losses)
         return loss, predictions
+
+    def predict(self, sequence):
+        out = self(sequence)
+        predictions = list()
+        for single_output in out:
+            prediction = self._I2L[np.argmax(single_output.npvalue())]
+            predictions.append(prediction)
+        return predictions
+
+
+
 
     def save_model(self, model_file):
         self._model.save(model_file)

@@ -1,5 +1,3 @@
-import dynet as dy
-from gen_examples import *
 from Utils import *
 from RNNAcceptor import RNNAcceptor
 import sys
@@ -24,5 +22,5 @@ if __name__ == '__main__':
 
     m = dy.ParameterCollection()
     trainer = dy.AdamTrainer(m)
-    acceptor = RNNAcceptor(3, EMBED_SIZE, 64, 32, 2, len(W2I), W2I, L2I, I2L, m)
-    train_acceptor(train, dev, 50, trainer, acceptor, 1)
+    acceptor = RNNAcceptor(1, EMBED_SIZE, 2, 2, 2, len(W2I), W2I, L2I, I2L, m)
+    train_acceptor(train, dev, 50, trainer, acceptor, 50)

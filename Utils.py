@@ -1,7 +1,6 @@
 import copy
 from collections import Counter
 
-
 def parse_tag_reading(lines, seperator, lower=False):
     words = list()
     labels = list()
@@ -115,3 +114,12 @@ def count_uniques(sentences):
     for words in sentences:
         fc.update(words)
     return fc
+
+
+def get_C2I(train):
+    c = Counter()
+    for sentence in train:
+        for key in sentence:
+            c.update(key)
+    C2I = {char: i for i, char in enumerate(c)}
+    return C2I

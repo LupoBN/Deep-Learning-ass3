@@ -1,31 +1,45 @@
 import time
-import dynet as dy
 import numpy as np
 import matplotlib.pyplot as plt
+from BiLSTM import BiLSTMNetwork
+from Utils import *
+from RepresentationStrategies import *
+from matplotlib.font_manager import FontProperties
 
 
 def blind_write(data, network, output_filename, separator):
     output_file = open(output_filename, 'w')
 
     for words, labels in data:
-        num_words = len(words) - 2
-        words_nums = np.array([tuple(word for word in words[i - 2:i + 3]) for i in range(2, num_words)])
-        prediction = network.predict(words_nums)
-        for i in range(0, prediction.size):
-            output_file.write(words_nums[i][2] + separator + prediction[i] + "\n")
+        predictions = network.predict(words)
+        for i in range(1, len(predictions) - 1):
+            output_file.write(words[i] + separator + predictions[i] + "\n")
         output_file.write("\n")
     output_file.close()
 
 
-def train_bi_lstm(train, dev, num_of_iterations, trainer, acceptor, batch_size, history=200000):
+def train_bi_lstm(train, dev, num_of_iterations, trainer, acceptor, save_file):
+    results = list()
+    best_acc = 0.0
+
     for epoch in range(num_of_iterations):
+
         np.random.shuffle(train)
 
         correct = 0.0
         incorrect = 0.0
         sum_of_losses = 0.0
-        counter = 1
+        counter = 0
         for sequence, label in train:
+            if counter % 500 == 0:
+                dev_acc, dev_loss = test_bi_lstm(dev, acceptor)
+                results.append(dev_acc)
+                if dev_acc > best_acc:
+                    best_acc = dev_acc
+
+                    acceptor.save_model(save_file)
+                print "Test accuracy:", dev_acc
+                print "Test loss:", dev_loss
             dy.renew_cg()  # new computation graph
             loss, prediction = acceptor.forward(sequence, label)
             sum_of_losses += loss.value()
@@ -40,18 +54,25 @@ def train_bi_lstm(train, dev, num_of_iterations, trainer, acceptor, batch_size, 
                 else:
                     # print "Wrong, Predicted:", pred, "True Label:", label[i + 2]
                     incorrect += 1.0
-            if counter % 500 == 0:
-                pass
+
             counter += 1
+        if counter % 500 == 0:
+            dev_acc, dev_loss = test_bi_lstm(dev, acceptor)
+            results.append(dev_acc)
+            if dev_acc > best_acc:
+                best_acc = dev_acc
+
+                acceptor.save_model(save_file)
+            print "Test accuracy:", dev_acc
+            print "Test loss:", dev_loss
+
         print "Itertation:", epoch + 1
         print "Training accuracy:", correct / (correct + incorrect)
         print "Training loss:", sum_of_losses / (correct + incorrect)
-        dev_acc, dev_loss = test_bi_lstm(dev, acceptor, batch_size, history)
-        print "Test accuracy:", dev_acc
-        print "Test loss:", dev_loss
+    return results
 
 
-def test_bi_lstm(dev, acceptor, batch_size, history):
+def test_bi_lstm(dev, acceptor):
     np.random.shuffle(dev)
     sum_of_losses = 0.0
     correct = 0.0
@@ -133,9 +154,54 @@ def test_acceptor(dev, acceptor, batch_size):
 
 
 # Plots the result of the training.
-def plot_results(history, title, ylabel, xlabel='Epoch'):
-    plt.plot(history)
+def plot_results(history, title, ylabel, xlabel='Sentences Seen / 100'):
     plt.title(title)
     plt.ylabel(ylabel)
+    x = [i * 5 for i in range(0, len(history["1"]))]
+    plt.plot(x, history['1'])
+    plt.plot(x, history['2'])
+    plt.plot(x, history['3'])
+    plt.plot(x, history['4'])
+    plt.xticks(x)
     plt.xlabel(xlabel)
+
+    fontP = FontProperties()
+    fontP.set_size('small')
+    plt.legend(['Embedding', 'Character Level LSTM', 'Embedding+Sub Words', 'Embedding + Character Level LSTM'],
+               loc="lower left")
+
     plt.show()
+
+
+def get_representation(m, W2I, train, arg, embed_size):
+    if arg == "1":
+        representor = SimpleEmbedding(embed_size, len(W2I), m, W2I)
+    elif arg == "2":
+        C2I = get_C2I(train)
+        representor = CharacterLSTM(1, 10, len(C2I), embed_size, m, C2I)
+    elif arg == "3":
+        sub_map = sub_words_mapping(train, len(W2I))
+        W2I.update(sub_map)
+        representor = SubWordEmbedding(embed_size, len(W2I), m, W2I)
+    elif arg == "4":
+        C2I = get_C2I(train)
+        representor = CharacterAndEmbedding(1, 10, C2I, W2I, embed_size, embed_size, m, embed_size)
+    return representor
+
+
+def prepare(repr, train_file, dev_file, embedding_size, layers, dims):
+    train, labels = read_file(train_file, parse_tag_reading)
+    dev, dev_labels = read_file(dev_file, parse_tag_reading)
+
+    most = 40000
+    T2I = create_mapping(labels, ignore_elements={"Start-", "End-"})
+    if len(T2I) < 40:
+        most = 20000
+    W2I = create_mapping(train, most_to_take=most)
+    I2T = [key for key, value in sorted(T2I.iteritems(), key=lambda (k, v): (v, k))]
+    m = dy.ParameterCollection()
+    representor = get_representation(m, W2I, train, repr, embedding_size)
+    network = BiLSTMNetwork(layers, embedding_size, dims[0], dims[1], len(T2I), representor, T2I, I2T, m,
+                            dy.SimpleRNNBuilder)
+    trainer = dy.AdamTrainer(m)
+    return zip(train, labels), zip(dev, dev_labels), network, trainer

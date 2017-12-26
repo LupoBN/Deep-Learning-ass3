@@ -164,7 +164,7 @@ def create_ab_language(start=1, end=500, letters=["a", "b"]):
 
 
 if __name__ == '__main__':
-    data = create_fibonaci_language(500, 10)
+    data = create_binary_language(is_divided_by_three, 1, 1500)
     random.shuffle(data)
     split = int(0.7 * len(data))
 
