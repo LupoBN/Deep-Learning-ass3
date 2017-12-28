@@ -36,7 +36,7 @@ class CharacterLSTM(object):
         s = self._builder.initial_state()
         representation = list()
         for word in sequence:
-            vecs = [self._E[self._C2I[i]] for i in word]
+            vecs = [self._E[self._C2I[i]] if i in self._C2I else self._E[self._C2I["C-UNK"]] for i in word]
             lstm_out = s.transduce(vecs)
             representation.append(lstm_out[-1])
         return representation

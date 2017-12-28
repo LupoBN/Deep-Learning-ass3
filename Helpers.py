@@ -11,6 +11,7 @@ def blind_write(data, network, output_filename, separator):
     output_file = open(output_filename, 'w')
 
     for words, labels in data:
+        dy.renew_cg()  # new computation graph
         predictions = network.predict(words)
         for i in range(1, len(predictions) - 1):
             output_file.write(words[i] + separator + predictions[i] + "\n")
@@ -162,13 +163,9 @@ def plot_results(history, title, ylabel, xlabel='Sentences Seen / 100'):
     plt.plot(x, history['2'])
     plt.plot(x, history['3'])
     plt.plot(x, history['4'])
-    plt.xticks(x)
     plt.xlabel(xlabel)
-
-    fontP = FontProperties()
-    fontP.set_size('small')
     plt.legend(['Embedding', 'Character Level LSTM', 'Embedding+Sub Words', 'Embedding + Character Level LSTM'],
-               loc="lower left")
+               loc="lower right")
 
     plt.show()
 

@@ -122,4 +122,5 @@ def get_C2I(train):
         for key in sentence:
             c.update(key)
     C2I = {char: i for i, char in enumerate(c)}
+    C2I["C-UNK"] = len(C2I)
     return C2I
